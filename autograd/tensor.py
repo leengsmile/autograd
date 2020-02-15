@@ -50,11 +50,12 @@ class Tensor:
     def backward(self, grad: 'Tensor' = None) -> None:
         if grad is None:
             if self.data.shape == (): 
-                grad = Tensor(1.)
+                grad = Tensor(1)
             else:
                 raise RuntimeError("grad should be specified for non-zero tensor.")
         
-        self.grad.data = grad.data
+        # self.grad.data = self.grad.data + grad.data
+        self.grad.data += grad.data
 
         for dependency in self.depends_on:
             backward_grad = dependency.grad_fn(grad.data)
@@ -78,5 +79,40 @@ def tensor_sum(t: Tensor) -> Tensor:
         depends_on = [Dependency(t, grad_fn)]
     else:
         depends_on = []
+
+    return Tensor(data, requires_grad, depends_on)
+
+def add(t1: Tensor, t2: Tensor) -> Tensor:
+
+    data = t1.data + t2.data
+    requires_grad = t1.requires_grad or t2.requires_grad
+    depends_on: List[Dependency] = []
+    if t1.requires_grad:
+
+        def grad_fn1(grad: np.ndarray) -> np.ndarray:
+            ndim_added = grad.ndim - t1.data.ndim
+            for _ in range(ndim_added):
+                grad = grad.sum(axis=0)
+            return grad
+
+            for i, dim in enumerate(t1.shape):
+                if dim == 1:
+                    grad = grad.sum(axis=i, keepdims=True)
+
+        depends_on.append(Dependency(t1, grad_fn1))
+
+    if t2.requires_grad:
+        def grad_fn2(grad: np.ndarray) -> np.ndarray:
+            ndim_added = grad.ndim - t2.data.ndim
+            for _ in range(ndim_added):
+                grad = grad.sum(axis=0)
+
+            for i, dim in enumerate(t2.shape):
+                if dim == 1:
+                    grad = grad.sum(axis=i, keepdims=True)
+
+            return grad
+
+        depends_on.append(Dependency(t2, grad_fn2))
 
     return Tensor(data, requires_grad, depends_on)
